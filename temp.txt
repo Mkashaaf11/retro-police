@@ -1,0 +1,13 @@
+Sample Usage for Color Coding
+Primary Background: Navy Blue or Dark Gray
+Headers/Navigation: A darker blue or black for a professional look.
+Text: Light gray or white for readability.
+Primary Buttons: Use brighter blue or red (depending on the tone you want for urgency).
+Accent Buttons: Gold/yellow for standout actions like “Submit” or “Finish.”
+Icons: Match icons to background for contrast; use white on dark backgrounds and black or blue on light backgrounds.
+Recommended Color Palette
+Primary Blue: #1A237E or #0D47A1
+Dark Gray/Black: #212121 or #000000
+White (for text): #FFFFFF
+Accent Gold/Yellow: #FFC107
+Red (for alerts): #D32F2F
