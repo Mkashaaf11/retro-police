@@ -8,6 +8,7 @@ import { Alert } from "react-native";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { DefaultTheme } from "react-native-paper";
 import { registerRootComponent } from "expo";
+import React from "react";
 
 // Import your screens
 import Login from "./app/screens/Login";
