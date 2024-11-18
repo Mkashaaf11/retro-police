@@ -24,7 +24,7 @@ const dummyData = [
 ];
 const barData = [{ value: 15 }, { value: 30 }, { value: 26 }, { value: 40 }];
 
-const Dashboard = () => {
+const Dashboard = ({ navigation }) => {
   return (
     <ScrollView style={styles.scrollContainer}>
       <View style={styles.container}>
@@ -41,7 +41,12 @@ const Dashboard = () => {
                 />
               </View>
               <View style={styles.mainButtonBox}>
-                <TouchableOpacity style={styles.mainButtons}>
+                <TouchableOpacity
+                  style={styles.mainButtons}
+                  onPress={() => {
+                    navigation.navigate("Add Report");
+                  }}
+                >
                   <Text>Add Report</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.mainButtons}>
@@ -69,7 +74,7 @@ const Dashboard = () => {
         </View>
         <View style={styles.ImgContainer}>
           <ImageBackground
-            source={require("../../assets/dashboard1.jpg")}
+            source={require("../../../assets/dashboard1.jpg")}
             style={styles.imageBackground}
           >
             <View style={styles.buttonContainer}>

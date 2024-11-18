@@ -11,21 +11,53 @@ import { registerRootComponent } from "expo";
 import React from "react";
 
 // Import your screens
-import Login from "./app/screens/Login";
-import Dashboard from "./app/screens/Dashboard";
-import Updates from "./app/screens/Updates";
-import Profile from "./app/screens/Profile";
-import ProfileInfo from "./app/screens/ProfileInfo"; // Add ProfileInfo screen
+import Login from "./app/screens/auth/Login";
+import Dashboard from "./app/screens/main/Dashboard";
+import Updates from "./app/screens/main/Updates";
+import Profile from "./app/screens/main/Profile";
+import ProfileInfo from "./app/screens/auth/ProfileInfo";
 import { PaperProvider } from "react-native-paper";
+import AddReportDetails from "./app/screens/secondary/report/AddReport_One";
+import SuspectDetail from "./app/screens/secondary/report/AddReport_Two";
+import EvidenceScreen from "./app/screens/secondary/report/AddReport_Three";
+import SummaryScreen from "./app/screens/secondary/report/SummaryScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+function AddReportStack() {
+  return (
+    <Stack.Navigator initialRouteName="Step 1">
+      <Stack.Screen name="Step 1" component={AddReportDetails} />
+      <Stack.Screen name="Step 2" component={SuspectDetail} />
+      <Stack.Screen name="Step 3" component={EvidenceScreen} />
+      <Stack.Screen name="SummaryScreen" component={SummaryScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function DashboardStack() {
+  return (
+    <Stack.Navigator initialRouteName="Dashboard">
+      <Stack.Screen name="Dashboard" component={Dashboard} />
+      <Stack.Screen
+        name="Add Report"
+        component={AddReportStack}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+}
 
 // Tab Navigator (for logged-in users)
 function TabNav() {
   return (
     <Tab.Navigator>
-      <Tab.Screen name="Dashboard" component={Dashboard} />
+      <Tab.Screen
+        name="Home"
+        component={DashboardStack}
+        options={{ headerShown: false }}
+      />
       <Tab.Screen name="Updates" component={Updates} />
       <Tab.Screen name="Profile" component={Profile} />
     </Tab.Navigator>
@@ -64,16 +96,7 @@ export default function App() {
   useEffect(() => {
     onAuthStateChanged(FIREBASE_AUTH, (user) => {
       if (user) {
-        if (user.emailVerified) {
-          setUser(user);
-        } else {
-          Alert.alert(
-            "Email Verification Required",
-            "Please verify your email before accessing the full app."
-          );
-          FIREBASE_AUTH.signOut(); // Sign out unverified users
-          setUser(null);
-        }
+        setUser(user);
       } else {
         setUser(null);
       }

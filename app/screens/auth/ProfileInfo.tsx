@@ -1,15 +1,18 @@
 import React, { useState } from "react";
 import { View, StyleSheet, Alert, Image, ScrollView } from "react-native";
 import { TextInput, Button, Card, Title, Text } from "react-native-paper";
-import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import * as Yup from "yup";
 import { Formik } from "formik";
+import { Picker } from "@react-native-picker/picker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { FIREBASE_STORAGE } from "../../../FirebaseConfig";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { insertOfficer } from "../../../database";
 
-const ProfileInfo = ({ navigation }) => {
+const ProfileInfo = ({ navigation, route }) => {
   const [image, setImage] = useState<string | null>(null);
-  const [location, setLocation] = useState<string>("");
+  const { officerID, email } = route.params;
 
   const validationSchema = Yup.object().shape({
     badgeNumber: Yup.number()
@@ -22,6 +25,27 @@ const ProfileInfo = ({ navigation }) => {
       .min(10, "Contact must be at least 10 digits")
       .matches(/^[0-9]{10}$/, "Contact must be exactly 10 digits"),
   });
+
+  const uploadPicture = async (uri, officerID): Promise<string> => {
+    const storage = getStorage();
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+        resolve(xhr.response);
+      };
+      xhr.onerror = function (e) {
+        console.log(e);
+        reject(new TypeError("Network request failed"));
+      };
+      xhr.responseType = "blob";
+      xhr.open("GET", uri, true);
+      xhr.send(null);
+    });
+    const filename = `profile_pictures/${officerID}_${Date.now()}.jpg`;
+    const storageRef = ref(storage, filename);
+    const uploadTask = uploadBytes(storageRef, blob);
+    return await getDownloadURL(storageRef);
+  };
 
   const pickImage = async () => {
     Alert.alert(
@@ -61,24 +85,37 @@ const ProfileInfo = ({ navigation }) => {
     );
   };
 
-  const getLocation = async () => {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission to access location was denied");
-      return;
-    }
-
-    let loc = await Location.getCurrentPositionAsync({});
-    setLocation(`Lat: ${loc.coords.latitude}, Lon: ${loc.coords.longitude}`);
-  };
-
   return (
     <Formik
       initialValues={{ badgeNumber: "", rank: "", name: "", contact: "" }}
       validationSchema={validationSchema}
-      onSubmit={(values) => {
-        console.log("Form Submitted", values);
-        navigation.replace("Login");
+      onSubmit={async (values) => {
+        try {
+          let pictureUrl: string | null = null;
+          if (image) {
+            pictureUrl = await uploadPicture(image, officerID);
+            console.log("Picture uploaded successfully:", pictureUrl);
+          }
+
+          const formData = { ...values, pictureUrl };
+          console.log("Submitting form with data:", formData);
+
+          // Add form submission logic here
+          const officerData = {
+            id: officerID,
+            name: values.name,
+            badge_number: values.badgeNumber,
+            rank: values.rank,
+            email: email,
+
+            contact: values.contact,
+            profile_picture: pictureUrl, // Either URL or null
+          };
+          await insertOfficer(officerData);
+          navigation.replace("Login");
+        } catch (error) {
+          console.error("Error during submission:", error);
+        }
       }}
     >
       {({
@@ -127,15 +164,19 @@ const ProfileInfo = ({ navigation }) => {
                   color="gray"
                   style={styles.icon}
                 />
-                <TextInput
-                  label="Rank"
-                  value={values.rank}
-                  onChangeText={handleChange("rank")}
-                  onBlur={handleBlur("rank")}
-                  mode="flat"
-                  style={styles.input}
-                  error={touched.rank && !!errors.rank}
-                />
+
+                <Picker
+                  selectedValue={values.rank}
+                  onValueChange={handleChange("rank")}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="Select rank" value="" />
+                  <Picker.Item label="Constable " value="Constable " />
+                  <Picker.Item label="Sergeant" value="Sergeant" />
+                  <Picker.Item label="Inspector" value="Inspector" />
+                  <Picker.Item label="Superintendent" value="Superintendent" />
+                  <Picker.Item label="Other" value="Other" />
+                </Picker>
               </View>
               {touched.rank && errors.rank && (
                 <Text style={styles.errorText}>{errors.rank}</Text>
@@ -205,25 +246,6 @@ const ProfileInfo = ({ navigation }) => {
                 <Image source={{ uri: image }} style={styles.image} />
               ) : (
                 <Text style={styles.errorText}>No profile photo selected.</Text>
-              )}
-
-              {/* Get Location Button */}
-              <Button
-                mode="outlined"
-                onPress={getLocation}
-                style={styles.button}
-                icon={() => (
-                  <MaterialCommunityIcons
-                    name="map-marker"
-                    size={20}
-                    color="#6dbf44"
-                  />
-                )}
-              >
-                Get Location
-              </Button>
-              {location && (
-                <Text style={styles.locationText}>Location: {location}</Text>
               )}
 
               {/* Submit Button */}
@@ -307,11 +329,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#6dbf44",
   },
-  locationText: {
+  picker: {
+    marginVertical: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
     color: "#333333",
-    marginTop: 12,
-    fontSize: 14,
-    textAlign: "center",
   },
   button: {
     marginTop: 10,

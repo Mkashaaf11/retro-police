@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   TouchableOpacity,
 } from "react-native";
-import { FIREBASE_AUTH } from "../../FirebaseConfig";
+import { FIREBASE_AUTH } from "../../../FirebaseConfig";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -47,12 +47,10 @@ const Login = ({ navigation }) => {
       );
       const successUser = userCredential.user;
       if (successUser) {
-        // Send email verification
-        await sendEmailVerification(successUser);
-        Alert.alert("Signup Successful", "Check your email for verification.");
-
+        const officerID = successUser.uid;
+        const email = successUser.email;
         // Navigate to ProfileInfo for additional data entry
-        navigation.navigate("ProfileInfo");
+        navigation.navigate("ProfileInfo", { officerID, email });
       }
     } catch (error: any) {
       console.error("Signup error:", error);
