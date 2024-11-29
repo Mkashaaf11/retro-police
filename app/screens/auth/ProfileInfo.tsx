@@ -1,3 +1,4 @@
+//ProfileInfo.tsx
 import React, { useState } from "react";
 import { View, StyleSheet, Alert, Image, ScrollView } from "react-native";
 import { TextInput, Button, Card, Title, Text } from "react-native-paper";
@@ -6,13 +7,14 @@ import * as Yup from "yup";
 import { Formik } from "formik";
 import { Picker } from "@react-native-picker/picker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { FIREBASE_STORAGE } from "../../../FirebaseConfig";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { insertOfficer } from "../../../database";
+import { supabase } from "../../../lib/supabase"; // Ensure supabase client is imported
+import { useProfile } from "../../../providers/ProfileContext";
 
 const ProfileInfo = ({ navigation, route }) => {
+  console.log("Hello");
   const [image, setImage] = useState<string | null>(null);
   const { officerID, email } = route.params;
+  const { isProfileComplete, setProfileComplete } = useProfile();
 
   const validationSchema = Yup.object().shape({
     badgeNumber: Yup.number()
@@ -25,26 +27,60 @@ const ProfileInfo = ({ navigation, route }) => {
       .min(10, "Contact must be at least 10 digits")
       .matches(/^[0-9]{10}$/, "Contact must be exactly 10 digits"),
   });
+  const uploadPicture = async (
+    uri: string,
+    officerID: string
+  ): Promise<string> => {
+    try {
+      if (!uri) {
+        throw new Error("Invalid URI provided.");
+      }
 
-  const uploadPicture = async (uri, officerID): Promise<string> => {
-    const storage = getStorage();
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.onload = function () {
-        resolve(xhr.response);
-      };
-      xhr.onerror = function (e) {
-        console.log(e);
-        reject(new TypeError("Network request failed"));
-      };
-      xhr.responseType = "blob";
-      xhr.open("GET", uri, true);
-      xhr.send(null);
-    });
-    const filename = `profile_pictures/${officerID}_${Date.now()}.jpg`;
-    const storageRef = ref(storage, filename);
-    const uploadTask = uploadBytes(storageRef, blob);
-    return await getDownloadURL(storageRef);
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const fileName = `profile_pictures/${officerID}_${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage
+        .from("profile-images")
+        .upload(fileName, blob, { contentType: "image/jpeg" });
+
+      if (error || !data) {
+        throw new Error(
+          "Upload failed: " + (error?.message || "Unknown error")
+        );
+      }
+
+      const { data: publicUrlData, error: urlError } = supabase.storage
+        .from("profile-images")
+        .getPublicUrl(fileName);
+
+      if (urlError || !publicUrlData?.publicUrl) {
+        throw new Error("Failed to retrieve public URL.");
+      }
+
+      return publicUrlData.publicUrl;
+    } catch (error) {
+      console.error("Error uploading picture:", error);
+      Alert.alert(
+        "Upload Error",
+        "Something went wrong while uploading the picture."
+      );
+      throw error; // Propagate error for upstream handling
+    }
+  };
+
+  const insertOfficer = async (officerData: Record<string, any>) => {
+    try {
+      const { data, error } = await supabase
+        .from("officers")
+        .insert([officerData]);
+      if (error) throw error;
+
+      console.log("Officer data inserted:", data);
+    } catch (error) {
+      console.error("Error inserting officer data:", error);
+      throw error;
+    }
   };
 
   const pickImage = async () => {
@@ -97,22 +133,19 @@ const ProfileInfo = ({ navigation, route }) => {
             console.log("Picture uploaded successfully:", pictureUrl);
           }
 
-          const formData = { ...values, pictureUrl };
-          console.log("Submitting form with data:", formData);
-
-          // Add form submission logic here
           const officerData = {
             id: officerID,
             name: values.name,
             badge_number: values.badgeNumber,
             rank: values.rank,
             email: email,
-
             contact: values.contact,
             profile_picture: pictureUrl, // Either URL or null
           };
+
           await insertOfficer(officerData);
-          navigation.replace("Login");
+          setProfileComplete(true);
+          //navigation.replace("Login");
         } catch (error) {
           console.error("Error during submission:", error);
         }
@@ -164,14 +197,13 @@ const ProfileInfo = ({ navigation, route }) => {
                   color="gray"
                   style={styles.icon}
                 />
-
                 <Picker
                   selectedValue={values.rank}
                   onValueChange={handleChange("rank")}
                   style={styles.picker}
                 >
                   <Picker.Item label="Select rank" value="" />
-                  <Picker.Item label="Constable " value="Constable " />
+                  <Picker.Item label="Constable" value="Constable" />
                   <Picker.Item label="Sergeant" value="Sergeant" />
                   <Picker.Item label="Inspector" value="Inspector" />
                   <Picker.Item label="Superintendent" value="Superintendent" />

@@ -1,22 +1,17 @@
+//Login.tsx
 import React, { useState } from "react";
 import {
   View,
   Text,
   TextInput,
-  Button,
+  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  TouchableOpacity,
 } from "react-native";
-import { FIREBASE_AUTH } from "../../../FirebaseConfig";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendEmailVerification,
-} from "firebase/auth";
 import { MaterialIcons } from "@expo/vector-icons";
+import { supabase } from "../../../lib/supabase";
 
 const Login = ({ navigation }) => {
   const [email, setEmail] = useState("");
@@ -25,36 +20,40 @@ const Login = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    setLoading(true);
     try {
-      await signInWithEmailAndPassword(FIREBASE_AUTH, email, password);
-      Alert.alert("Login Successful", "Welcome back!");
-    } catch (error: any) {
-      console.error("Login error:", error);
-      Alert.alert("Login Failed", error.message);
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      Alert.alert("Login successful!");
+    } catch (error) {
+      Alert.alert("Login failed", error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handlesignup = async () => {
-    setLoading(true);
+  const handleSignup = async () => {
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        FIREBASE_AUTH,
-        email,
-        password
-      );
-      const successUser = userCredential.user;
-      if (successUser) {
-        const officerID = successUser.uid;
-        const email = successUser.email;
-        // Navigate to ProfileInfo for additional data entry
-        navigation.navigate("ProfileInfo", { officerID, email });
+      setLoading(true);
+      const { data, error } = await supabase.auth.signUp({ email, password });
+
+      if (error) {
+        throw error;
       }
-    } catch (error: any) {
-      console.error("Signup error:", error);
-      Alert.alert("Signup Failed", error.message);
+
+      if (!data?.user) {
+        Alert.alert("Please check your inbox for email verification!");
+        return;
+      }
+    } catch (error) {
+      Alert.alert("Signup failed", error.message);
     } finally {
       setLoading(false);
     }
@@ -91,7 +90,7 @@ const Login = ({ navigation }) => {
             style={styles.icon}
           />
           <TextInput
-            style={[styles.input, { paddingRight: 40 }]} // Adjust padding for icon space
+            style={[styles.input, { paddingRight: 40 }]}
             placeholder="Password"
             placeholderTextColor="#888888"
             value={password}
@@ -100,7 +99,7 @@ const Login = ({ navigation }) => {
           />
           <TouchableOpacity
             onPress={() => setShowPassword((prev) => !prev)}
-            style={styles.eyeIconContainer} // Added container for eye icon positioning
+            style={styles.eyeIconContainer}
           >
             <MaterialIcons
               name={showPassword ? "visibility" : "visibility-off"}
@@ -117,7 +116,7 @@ const Login = ({ navigation }) => {
             <TouchableOpacity style={styles.button} onPress={handleLogin}>
               <Text style={styles.buttonText}>Login</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={handlesignup}>
+            <TouchableOpacity style={styles.button} onPress={handleSignup}>
               <Text style={styles.buttonText}>Sign Up</Text>
             </TouchableOpacity>
           </>
@@ -173,7 +172,7 @@ const styles = StyleSheet.create({
   },
   eyeIconContainer: {
     position: "absolute",
-    right: 10, // Positioning the eye icon to the right inside the input
+    right: 10,
   },
   icon: {
     marginRight: 8,
