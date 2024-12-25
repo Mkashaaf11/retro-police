@@ -1,18 +1,55 @@
-import React, { useState } from "react";
-import { View, StyleSheet, Alert, Image, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, StyleSheet, Alert, ScrollView, Image } from "react-native";
 import { TextInput, Button, Card, Title, Text } from "react-native-paper";
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
+import { useProfile } from "../../../../providers/ProfileContext";
 import { Formik } from "formik";
 import * as Yup from "yup";
+import { supabase } from "../../../../lib/supabase";
+import * as FileSystem from "expo-file-system";
 
-const SuspectDetail = ({ navigation }) => {
+const SuspectDetail = ({ navigation, route }) => {
   const [image, setImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [createdBy, setCreatedBy] = useState<string | null>(null);
+  const { session } = useProfile();
+  const { reportId: report_id } = route.params;
+
+  const fetchOfficerId = async () => {
+    try {
+      if (session?.user?.email) {
+        const { data, error } = await supabase
+          .from("officers")
+          .select("id")
+          .eq("email", session.user.email)
+          .single();
+
+        if (error) {
+          console.error("Error fetching officer ID:", error);
+        } else {
+          setCreatedBy(data.id);
+        }
+      }
+    } catch (error) {
+      console.error("Error during officer ID retrieval:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchOfficerId();
+  }, []);
 
   const validationSchema = Yup.object().shape({
     name: Yup.string().required("Name is required"),
-    description: Yup.string(),
-    ethnicity: Yup.string().required("Ethnicity is required"),
+    description: Yup.string().required("Description is required"),
+    ethnicity: Yup.string()
+      .required("Ethnicity is required")
+      .notOneOf([""], "Please select a valid ethnicity"),
+    age: Yup.number()
+      .required("Age is required")
+      .min(0, "Age must be a positive number"),
+    gender: Yup.string().required("Gender is required"),
   });
 
   const pickImage = async () => {
@@ -29,7 +66,7 @@ const SuspectDetail = ({ navigation }) => {
               aspect: [4, 3],
               quality: 1,
             });
-            if (!result.canceled) {
+            if (!result.canceled && result.assets && result.assets[0].uri) {
               setImage(result.assets[0].uri);
             }
           },
@@ -42,7 +79,7 @@ const SuspectDetail = ({ navigation }) => {
               aspect: [4, 3],
               quality: 1,
             });
-            if (!result.canceled) {
+            if (!result.canceled && result.assets && result.assets[0].uri) {
               setImage(result.assets[0].uri);
             }
           },
@@ -53,107 +90,175 @@ const SuspectDetail = ({ navigation }) => {
     );
   };
 
+  const uploadImageToSupabase = async (uri: string) => {
+    try {
+      setLoading(true);
+      const base64Data = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const arrayBuffer = Uint8Array.from(atob(base64Data), (c) =>
+        c.charCodeAt(0)
+      );
+
+      const uniqueImageName = `suspect_${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage
+        .from("profile-images/suspects")
+        .upload(uniqueImageName, arrayBuffer, { contentType: "image/jpeg" });
+
+      if (error) throw error;
+
+      const { data: urlData } = supabase.storage
+        .from("profile-images/suspects")
+        .getPublicUrl(data.path);
+
+      return urlData.publicUrl;
+    } catch (error) {
+      Alert.alert("Image Upload Error", error.message);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveSuspectToDatabase = async (suspectData) => {
+    try {
+      const { data, error } = await supabase
+        .from("suspects")
+        .insert(suspectData)
+        .select("*");
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      Alert.alert("Database Insertion Error", error.message);
+    }
+  };
+
+  const saveEvidenceToDatabase = async (suspectId, fileUrl) => {
+    try {
+      const evidenceData = {
+        suspect_id: suspectId,
+        case_id: report_id,
+        added_by: createdBy,
+        type: ["image"], // Assuming it's an image type; can be adjusted
+        file_url: fileUrl,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from("evidence")
+        .insert([evidenceData])
+        .select("*");
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      Alert.alert("Evidence Insert Error", error.message);
+    }
+  };
+
   return (
     <Formik
-      initialValues={{ name: "", description: "", ethnicity: "" }}
+      initialValues={{
+        name: "",
+        description: "",
+        ethnicity: "",
+        age: "",
+        gender: "",
+      }}
       validationSchema={validationSchema}
-      onSubmit={(values) => {
-        console.log("Suspect Details Submitted", values, { image });
-        navigation.navigate("Step 3", {
-          suspectData: { ...values, image },
-        });
+      onSubmit={async (values) => {
+        if (!createdBy) {
+          Alert.alert("Error", "You must be logged in to submit a report.");
+          return;
+        }
+
+        if (!image) {
+          Alert.alert("Error", "Please select an image before submitting.");
+          return;
+        }
+
+        const imageUrl = await uploadImageToSupabase(image);
+        if (!imageUrl) return;
+
+        const suspectData = {
+          ...values,
+          report_id,
+          created_by: createdBy,
+          created_at: new Date().toISOString(),
+        };
+
+        const insertedSuspect = await saveSuspectToDatabase(suspectData);
+        if (!insertedSuspect) return;
+
+        // Insert the evidence record
+        await saveEvidenceToDatabase(insertedSuspect[0].id, imageUrl);
+
+        navigation.navigate("Step 3", { insertedSuspect: insertedSuspect[0] });
       }}
     >
-      {({
-        handleChange,
-        handleBlur,
-        handleSubmit,
-        values,
-        errors,
-        touched,
-        isValid,
-        isSubmitting,
-      }) => {
-        return (
-          <ScrollView style={styles.container}>
-            <Card style={styles.card}>
-              <Card.Content>
-                <Title style={styles.title}>Suspect Details</Title>
-
-                {/* Name Field */}
-                <TextInput
-                  label="Name"
-                  value={values.name}
-                  onChangeText={handleChange("name")}
-                  onBlur={handleBlur("name")}
-                  mode="flat"
-                  style={styles.input}
-                  error={touched.name && !!errors.name}
-                />
-                {touched.name && errors.name && (
-                  <Text style={styles.errorText}>{errors.name}</Text>
-                )}
-
-                {/* Ethnicity Dropdown */}
-                <Picker
-                  selectedValue={values.ethnicity}
-                  onValueChange={handleChange("ethnicity")}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="Select Ethnicity" value="" />
-                  <Picker.Item label="Asian" value="Asian" />
-                  <Picker.Item label="Black" value="Black" />
-                  <Picker.Item label="White" value="White" />
-                  <Picker.Item label="Hispanic" value="Hispanic" />
-                  <Picker.Item label="Other" value="Other" />
-                </Picker>
-                {touched.ethnicity && errors.ethnicity && (
-                  <Text style={styles.errorText}>{errors.ethnicity}</Text>
-                )}
-
-                {/* Description Field */}
-                <TextInput
-                  label="Description (Optional)"
-                  value={values.description}
-                  onChangeText={handleChange("description")}
-                  onBlur={handleBlur("description")}
-                  mode="flat"
-                  style={styles.input}
-                  multiline
-                />
-
-                {/* Image Picker */}
-                <Button
-                  mode="outlined"
-                  onPress={pickImage}
-                  style={styles.button}
-                  icon="camera"
-                >
-                  Select Suspect Image
-                </Button>
-                {image ? (
-                  <Image source={{ uri: image }} style={styles.image} />
-                ) : (
-                  <Text style={styles.errorText}>No image selected</Text>
-                )}
-
-                {/* Submit Button */}
-                <Button
-                  mode="contained"
-                  onPress={handleSubmit}
-                  style={styles.submitButton}
-                  disabled={!isValid || isSubmitting || !image}
-                >
-                  Next
-                </Button>
-              </Card.Content>
-            </Card>
-          </ScrollView>
-        );
-      }}
+      {({ handleChange, handleBlur, handleSubmit, values, errors }) => (
+        <ScrollView style={styles.container}>
+          <Card style={styles.card}>
+            <Card.Content>
+              <Title style={styles.title}>Suspect Details</Title>
+              <TextInput
+                label="Name"
+                onChangeText={handleChange("name")}
+                onBlur={handleBlur("name")}
+                style={styles.input}
+                error={!!errors.name}
+              />
+              <TextInput
+                label="Age"
+                keyboardType="numeric"
+                onChangeText={handleChange("age")}
+                style={styles.input}
+                error={!!errors.age}
+              />
+              <Picker
+                selectedValue={values.gender}
+                onValueChange={handleChange("gender")}
+                style={styles.picker}
+              >
+                <Picker.Item label="Select Gender" value="" />
+                <Picker.Item label="Male" value="Male" />
+                <Picker.Item label="Female" value="Female" />
+                <Picker.Item label="Other" value="Other" />
+              </Picker>
+              <Picker
+                selectedValue={values.ethnicity}
+                onValueChange={handleChange("ethnicity")}
+                style={styles.picker}
+              >
+                <Picker.Item label="Select Ethnicity" value="" />
+                <Picker.Item label="Asian" value="Asian" />
+                <Picker.Item label="Black" value="Black" />
+                <Picker.Item label="White" value="White" />
+                <Picker.Item label="Hispanic" value="Hispanic" />
+                <Picker.Item label="Other" value="Other" />
+              </Picker>
+              <TextInput
+                label="Description"
+                onChangeText={handleChange("description")}
+                multiline
+                style={styles.input}
+              />
+              {image && <Image source={{ uri: image }} style={styles.image} />}
+              <Button onPress={pickImage} mode="contained">
+                Pick Image
+              </Button>
+              <Button onPress={handleSubmit} style={styles.submitButton}>
+                Submit
+              </Button>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      )}
     </Formik>
   );
 };
+
+export default SuspectDetail;
 
 const styles = StyleSheet.create({
   container: {
@@ -212,5 +317,3 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 });
-
-export default SuspectDetail;

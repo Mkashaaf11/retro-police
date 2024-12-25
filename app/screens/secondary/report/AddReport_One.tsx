@@ -6,16 +6,23 @@ import { Formik } from "formik";
 import * as Yup from "yup";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useProfile } from "../../../../providers/ProfileContext";
+import { supabase } from "../../../../lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AddReportDetails = ({ navigation }) => {
   const [location, setLocation] = useState("");
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const { session } = useProfile();
 
   const validationSchema = Yup.object().shape({
     incidentDescription: Yup.string()
       .required("Incident description is required")
       .min(10, "Description must be at least 10 characters"),
+    title: Yup.string().required(
+      "Give a title to the report please for your convenience"
+    ),
   });
 
   const getLocation = async () => {
@@ -36,14 +43,70 @@ const AddReportDetails = ({ navigation }) => {
     }
   };
 
+  const handleSubmit = async (values) => {
+    const { title, incidentDescription } = values;
+    let created_by = null;
+    if (session?.user?.email) {
+      const { data, error } = await supabase
+        .from("officers")
+        .select("*")
+        .eq("email", session.user.email)
+        .single();
+
+      if (error) {
+        console.error("Error fetching profile data:", error);
+      } else {
+        created_by = data.id;
+        console.log(created_by);
+      }
+    }
+
+    if (!created_by) {
+      Alert.alert("Error", "You must be logged in to submit a report.");
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("reports")
+        .insert([
+          {
+            title,
+            description: incidentDescription,
+            created_by,
+            status: "pending",
+            location,
+            incident_date: date,
+          },
+        ])
+        .select("*");
+
+      if (error) {
+        Alert.alert("Error", "Failed to submit the report. Please try again.");
+        console.error(error);
+      } else {
+        if (data && data.length > 0) {
+          const reportId = data[0]?.id;
+          navigation.navigate("Step 2", { reportId });
+        }
+
+        // Save report data in AsyncStorage for later use
+        //await AsyncStorage.setItem("reportId", reportId.toString());
+        /*await AsyncStorage.setItem(
+          "reportData",
+          JSON.stringify({ title, incidentDescription, location, date })
+        ); */
+      }
+    } catch (error) {
+      Alert.alert("Error", "An error occurred while submitting the report.");
+      console.error(error);
+    }
+  };
+
   return (
     <Formik
-      initialValues={{ incidentDescription: "" }}
+      initialValues={{ title: "", incidentDescription: "" }}
       validationSchema={validationSchema}
-      onSubmit={(values) => {
-        console.log("Form Submitted", { ...values, date, location });
-        navigation.navigate("Step 2"); // Navigate to next screen
-      }}
+      onSubmit={handleSubmit}
     >
       {({
         handleChange,
@@ -59,6 +122,29 @@ const AddReportDetails = ({ navigation }) => {
           <Card style={styles.card}>
             <Card.Content>
               <Title style={styles.title}>Incident Details</Title>
+
+              {/* Incident Title Field */}
+              <View style={styles.inputContainer}>
+                <MaterialCommunityIcons
+                  name="file-document-edit"
+                  size={20}
+                  color="gray"
+                  style={styles.icon}
+                />
+                <TextInput
+                  label="Incident Title"
+                  value={values.title}
+                  onChangeText={handleChange("title")}
+                  onBlur={handleBlur("title")}
+                  mode="flat"
+                  style={styles.input}
+                  multiline
+                  error={touched.title && !!errors.title}
+                />
+              </View>
+              {touched.title && errors.title && (
+                <Text style={styles.errorText}>{errors.title}</Text>
+              )}
 
               {/* Incident Description Field */}
               <View style={styles.inputContainer}>
@@ -138,13 +224,6 @@ const AddReportDetails = ({ navigation }) => {
                 style={styles.submitButton}
                 disabled={!isValid || isSubmitting}
                 contentStyle={styles.buttonContent}
-                icon={() => (
-                  <MaterialCommunityIcons
-                    name="skip-next-circle-outline"
-                    size={20}
-                    color="black"
-                  />
-                )}
               >
                 Next
               </Button>

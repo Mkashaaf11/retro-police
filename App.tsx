@@ -15,15 +15,13 @@ export default function App() {
   useEffect(() => {
     const getSession = async () => {
       const { data } = await supabase.auth.getSession();
-      console.log("Initial Session Data:", data);
-      console.log("Session Object:", data?.session);
       setSession(data?.session || null);
     };
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         console.log("Auth State Change Event:", _event);
-        console.log("New Session:", session);
+
         setSession(session);
       }
     );
