@@ -140,7 +140,7 @@ const SuspectDetail = ({ navigation, route }) => {
         suspect_id: suspectId,
         case_id: report_id,
         added_by: createdBy,
-        type: ["image"], // Assuming it's an image type; can be adjusted
+        type: ["image"],
         file_url: fileUrl,
         created_at: new Date().toISOString(),
       };
@@ -184,6 +184,7 @@ const SuspectDetail = ({ navigation, route }) => {
           ...values,
           report_id,
           created_by: createdBy,
+          image_url: imageUrl,
           created_at: new Date().toISOString(),
         };
 
@@ -201,6 +202,8 @@ const SuspectDetail = ({ navigation, route }) => {
           <Card style={styles.card}>
             <Card.Content>
               <Title style={styles.title}>Suspect Details</Title>
+
+              {/* Name Input */}
               <TextInput
                 label="Name"
                 onChangeText={handleChange("name")}
@@ -208,6 +211,8 @@ const SuspectDetail = ({ navigation, route }) => {
                 style={styles.input}
                 error={!!errors.name}
               />
+
+              {/* Age Input */}
               <TextInput
                 label="Age"
                 keyboardType="numeric"
@@ -215,6 +220,8 @@ const SuspectDetail = ({ navigation, route }) => {
                 style={styles.input}
                 error={!!errors.age}
               />
+
+              {/* Gender Picker */}
               <Picker
                 selectedValue={values.gender}
                 onValueChange={handleChange("gender")}
@@ -225,6 +232,8 @@ const SuspectDetail = ({ navigation, route }) => {
                 <Picker.Item label="Female" value="Female" />
                 <Picker.Item label="Other" value="Other" />
               </Picker>
+
+              {/* Ethnicity Picker */}
               <Picker
                 selectedValue={values.ethnicity}
                 onValueChange={handleChange("ethnicity")}
@@ -237,17 +246,35 @@ const SuspectDetail = ({ navigation, route }) => {
                 <Picker.Item label="Hispanic" value="Hispanic" />
                 <Picker.Item label="Other" value="Other" />
               </Picker>
+
+              {/* Description Input */}
               <TextInput
                 label="Description"
                 onChangeText={handleChange("description")}
                 multiline
                 style={styles.input}
               />
+
+              {/* Image Display */}
               {image && <Image source={{ uri: image }} style={styles.image} />}
-              <Button onPress={pickImage} mode="contained">
+
+              {/* Pick Image Button */}
+              <Button
+                onPress={pickImage}
+                mode="contained"
+                style={styles.button}
+                labelStyle={styles.buttonText}
+              >
                 Pick Image
               </Button>
-              <Button onPress={handleSubmit} style={styles.submitButton}>
+
+              {/* Submit Button */}
+              <Button
+                onPress={() => handleSubmit()}
+                mode="contained"
+                style={styles.submitButton}
+                labelStyle={styles.buttonText}
+              >
                 Submit
               </Button>
             </Card.Content>
@@ -257,8 +284,6 @@ const SuspectDetail = ({ navigation, route }) => {
     </Formik>
   );
 };
-
-export default SuspectDetail;
 
 const styles = StyleSheet.create({
   container: {
@@ -274,7 +299,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   title: {
-    color: "#333333",
+    color: "#1a73e8",
     marginBottom: 12,
     fontSize: 22,
     fontWeight: "bold",
@@ -283,19 +308,19 @@ const styles = StyleSheet.create({
   input: {
     marginBottom: 10,
     backgroundColor: "transparent",
+    borderRadius: 8,
+    fontSize: 14,
+    padding: 8,
+    borderColor: "#1a73e8", // Blue border
+    borderWidth: 1,
   },
   picker: {
     marginVertical: 10,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: "#1a73e8", // Blue border for pickers
     borderRadius: 8,
     color: "#333333",
-  },
-  errorText: {
-    color: "#e74c3c",
-    fontSize: 12,
-    marginBottom: 8,
   },
   image: {
     width: 100,
@@ -304,16 +329,22 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     borderRadius: 50,
     borderWidth: 2,
-    borderColor: "#6dbf44",
+    borderColor: "#1a73e8", // Blue border for image
   },
   button: {
     marginTop: 10,
     borderRadius: 6,
+    backgroundColor: "#1a73e8", // Blue button
+  },
+  buttonText: {
+    color: "white",
   },
   submitButton: {
     marginTop: 20,
-    backgroundColor: "#6dbf44",
+    backgroundColor: "#1a73e8", // Blue button for submit
     paddingVertical: 8,
     borderRadius: 8,
   },
 });
+
+export default SuspectDetail;

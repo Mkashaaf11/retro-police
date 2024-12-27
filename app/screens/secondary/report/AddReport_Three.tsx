@@ -7,6 +7,7 @@ import {
   Alert,
   TouchableOpacity,
   Text,
+  ActivityIndicator,
 } from "react-native";
 import { Button, Card, Title } from "react-native-paper";
 import * as ImagePicker from "expo-image-picker";
@@ -29,16 +30,43 @@ const EvidenceScreen = ({ navigation, route }) => {
       return;
     }
 
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
+    Alert.alert(
+      "Choose Image Source",
+      "Select an option to pick an image",
+      [
+        {
+          text: "Gallery",
+          onPress: async () => {
+            let result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 1,
+            });
 
-    if (!result.canceled) {
-      setImages([...images, result.assets[0].uri]);
-    }
+            if (!result.canceled && result.assets && result.assets[0].uri) {
+              setImages([...images, result.assets[0].uri]);
+            }
+          },
+        },
+        {
+          text: "Camera",
+          onPress: async () => {
+            let result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 1,
+            });
+
+            if (!result.canceled && result.assets && result.assets[0].uri) {
+              setImages([...images, result.assets[0].uri]);
+            }
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ],
+      { cancelable: true }
+    );
   };
 
   const removeImage = (index: number) => {
@@ -112,7 +140,6 @@ const EvidenceScreen = ({ navigation, route }) => {
         .from("evidence-files/audio")
         .getPublicUrl(data.path);
 
-      console.log("Audio Url:", urlData.publicUrl);
       return urlData.publicUrl;
     } catch (error) {
       Alert.alert("Audio Upload Error", error.message);
@@ -133,7 +160,6 @@ const EvidenceScreen = ({ navigation, route }) => {
         created_at: new Date().toISOString(),
       }));
 
-      console.log("Evidence Entries: ", evidenceEntries);
       const { data, error } = await supabase
         .from("evidence")
         .insert(evidenceEntries)
@@ -189,13 +215,18 @@ const EvidenceScreen = ({ navigation, route }) => {
   };
 
   const playAudio = async () => {
-    if (!audioUri || isPlaying) return; // Prevent multiple playbacks
+    if (!audioUri || isPlaying) return;
     try {
       const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
       setSound(sound);
       setIsPlaying(true);
       sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
+        //status.didJustFinish
+        if (
+          status.isLoaded &&
+          !status.isPlaying &&
+          status.positionMillis === status.durationMillis
+        ) {
           setIsPlaying(false);
         }
       });
@@ -237,36 +268,6 @@ const EvidenceScreen = ({ navigation, route }) => {
       }
     };
   }, []);
-
-  useEffect(() => {
-    const handleBeforeRemove = async (e) => {
-      if (recording) {
-        e.preventDefault();
-        Alert.alert(
-          "Exit Warning",
-          "You are recording audio. Stop the recording first before exiting.",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Exit Anyway",
-              style: "destructive",
-              onPress: async () => {
-                await recording
-                  .stopAndUnloadAsync()
-                  .catch((error) =>
-                    console.error("Error stopping recording on exit:", error)
-                  );
-                navigation.dispatch(e.data.action);
-              },
-            },
-          ]
-        );
-      }
-    };
-
-    navigation.addListener("beforeRemove", handleBeforeRemove);
-    return () => navigation.removeListener("beforeRemove", handleBeforeRemove);
-  }, [recording]);
 
   const handleSubmit = async () => {
     if (images.length === 0 && !audioUri) {
@@ -324,7 +325,7 @@ const EvidenceScreen = ({ navigation, route }) => {
           <View style={styles.sliderContainer}>
             <FlatList
               data={images}
-              horizontal
+              numColumns={3} // Grid layout with 3 columns
               keyExtractor={(item) => item} // Unique key for each image URI
               renderItem={({ item, index }) => (
                 <View style={styles.imageContainer}>
@@ -376,13 +377,10 @@ const EvidenceScreen = ({ navigation, route }) => {
             disabled={images.length === 0 && !audioUri}
             style={[
               styles.submitButton,
-              {
-                backgroundColor:
-                  images.length === 0 && !audioUri ? "#cccccc" : "#6dbf44",
-              },
+              { backgroundColor: loading ? "#cccccc" : "#007bff" },
             ]}
           >
-            Submit Evidence
+            {loading ? <ActivityIndicator color="#fff" /> : "Submit Evidence"}
           </Button>
         </Card.Content>
       </Card>
@@ -415,6 +413,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: "relative",
     marginRight: 10,
+    marginBottom: 10,
   },
   image: {
     width: 100,
@@ -445,7 +444,6 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 20,
-    backgroundColor: "#6dbf44",
     paddingVertical: 8,
     borderRadius: 8,
   },

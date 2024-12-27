@@ -1,4 +1,3 @@
-//Login.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -62,13 +61,13 @@ const Login = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView behavior="padding">
-        <Text style={styles.title}>Login</Text>
+        <Text style={styles.title}>Welcome Back</Text>
 
         <View style={styles.inputContainer}>
           <MaterialIcons
             name="email"
             size={24}
-            color="#6dbf44"
+            color="#4A90E2"
             style={styles.icon}
           />
           <TextInput
@@ -86,7 +85,7 @@ const Login = ({ navigation }) => {
           <MaterialIcons
             name="lock"
             size={24}
-            color="#6dbf44"
+            color="#4A90E2"
             style={styles.icon}
           />
           <TextInput
@@ -104,20 +103,23 @@ const Login = ({ navigation }) => {
             <MaterialIcons
               name={showPassword ? "visibility" : "visibility-off"}
               size={24}
-              color="#6dbf44"
+              color="#4A90E2"
             />
           </TouchableOpacity>
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#6dbf44" />
+          <ActivityIndicator size="large" color="#4A90E2" />
         ) : (
           <>
             <TouchableOpacity style={styles.button} onPress={handleLogin}>
               <Text style={styles.buttonText}>Login</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={handleSignup}>
-              <Text style={styles.buttonText}>Sign Up</Text>
+            <TouchableOpacity
+              style={styles.buttonSecondary}
+              onPress={handleSignup}
+            >
+              <Text style={styles.buttonTextSecondary}>Sign Up</Text>
             </TouchableOpacity>
           </>
         )}
@@ -131,26 +133,39 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 16,
-    backgroundColor: "#f7f7f7", // Light background
+    backgroundColor: "#f7faff", // Subtle blue background
   },
   title: {
-    fontSize: 24,
-    color: "#333333", // Dark text color
+    fontSize: 28,
+    color: "#2D3A45", // Dark blue-gray text color
     marginBottom: 24,
     textAlign: "center",
     fontWeight: "bold",
+    fontFamily: "Roboto",
   },
-
   button: {
-    backgroundColor: "#6dbf44", // Green background for buttons
+    backgroundColor: "#4A90E2", // Primary blue
     paddingVertical: 12,
     borderRadius: 8,
     marginBottom: 16,
     alignItems: "center",
     elevation: 3, // Shadow for buttons
   },
+  buttonSecondary: {
+    borderWidth: 1,
+    borderColor: "#4A90E2", // Blue border for secondary button
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    elevation: 0,
+  },
   buttonText: {
     color: "#fff", // White text for button
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  buttonTextSecondary: {
+    color: "#4A90E2", // Blue text for secondary button
     fontSize: 16,
     fontWeight: "bold",
   },
@@ -158,13 +173,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#ccc",
-    marginBottom: 10,
+    borderBottomColor: "#ddd",
+    marginBottom: 20,
     position: "relative", // Relative positioning to place the icon inside
   },
   input: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     fontSize: 14,
     color: "#333333",

@@ -57,7 +57,6 @@ const AddReportDetails = ({ navigation }) => {
         console.error("Error fetching profile data:", error);
       } else {
         created_by = data.id;
-        console.log(created_by);
       }
     }
 
@@ -128,7 +127,7 @@ const AddReportDetails = ({ navigation }) => {
                 <MaterialCommunityIcons
                   name="file-document-edit"
                   size={20}
-                  color="gray"
+                  color="#4A90E2"
                   style={styles.icon}
                 />
                 <TextInput
@@ -151,7 +150,7 @@ const AddReportDetails = ({ navigation }) => {
                 <MaterialCommunityIcons
                   name="file-document-edit"
                   size={20}
-                  color="gray"
+                  color="#4A90E2"
                   style={styles.icon}
                 />
                 <TextInput
@@ -182,7 +181,7 @@ const AddReportDetails = ({ navigation }) => {
                   <MaterialCommunityIcons
                     name="calendar"
                     size={20}
-                    color="#6dbf44"
+                    color="#4A90E2"
                   />
                 )}
               >
@@ -207,7 +206,7 @@ const AddReportDetails = ({ navigation }) => {
                   <MaterialCommunityIcons
                     name="map-marker"
                     size={20}
-                    color="#6dbf44"
+                    color="#4A90E2"
                   />
                 )}
               >
@@ -220,7 +219,7 @@ const AddReportDetails = ({ navigation }) => {
               {/* Submit Button */}
               <Button
                 mode="contained"
-                onPress={handleSubmit}
+                onPress={() => handleSubmit()}
                 style={styles.submitButton}
                 disabled={!isValid || isSubmitting}
                 contentStyle={styles.buttonContent}
@@ -291,10 +290,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingVertical: 6,
     borderRadius: 6,
+    borderColor: "#4A90E2",
+    borderWidth: 1,
   },
   submitButton: {
     marginTop: 20,
-    backgroundColor: "#6dbf44",
+    backgroundColor: "#4A90E2", // Primary blue
     paddingVertical: 8,
     borderRadius: 8,
   },

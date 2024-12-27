@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,72 +11,144 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { supabase } from "../../../lib/supabase";
+import { useProfile } from "../../../providers/ProfileContext";
+import axios from "axios";
 
 const { width } = Dimensions.get("window");
+const GOOGLE_MAPS_API_KEY = "AIzaSyA3FzKFHiA7bUcmOaubinG6wqCZt8Dw7Yk";
 
-const dummyData = [
-  {
-    id: "1",
-    image: "https://via.placeholder.com/400x400",
-    description:
-      "Suspicious activity near the park. Multiple individuals observed acting suspiciously around playground equipment. Investigating potential security concerns.",
-    date: "12 Nov 2024",
-    officer: "Officer John Doe",
-    location: "Central Park",
-    status: "Under Investigation",
-  },
-  {
-    id: "2",
-    image: "https://via.placeholder.com/400x400",
-    description:
-      "Unauthorized vehicle spotted at checkpoint. Vehicle matches description of recent stolen vehicle. Immediate action taken to secure the area.",
-    date: "10 Nov 2024",
-    officer: "Officer Jane Smith",
-    location: "Highway Checkpoint",
-    status: "Resolved",
-  },
-  {
-    id: "3",
-    image: "https://via.placeholder.com/400x400",
-    description:
-      "Theft reported in the downtown area. Multiple items stolen from local businesses. Detailed investigation underway to track down suspects.",
-    date: "8 Nov 2024",
-    officer: "Officer Mike Brown",
-    location: "Downtown District",
-    status: "Active",
-  },
-];
-
-const Updates = () => {
-  const [data, setData] = useState(dummyData);
+const Updates = ({ navigation }) => {
+  const { session } = useProfile();
+  const [data, setData] = useState<any>([]);
+  const [originalData, setOriginalData] = useState<any>([]);
   const [searchText, setSearchText] = useState("");
+  const [officerDetails, setOfficerDetails] = useState({});
+  const [createdBy, setCreatedBy] = useState(null);
+
+  // Fetch Officer ID based on the current session email
+  const fetchOfficerId = async () => {
+    try {
+      if (session?.user?.email) {
+        const { data, error } = await supabase
+          .from("officers")
+          .select("id, contact, name")
+          .eq("email", session.user.email)
+          .single();
+
+        if (error) {
+          console.error("Error fetching officer ID:", error);
+        } else {
+          setCreatedBy(data.id);
+          setOfficerDetails(data);
+        }
+      }
+    } catch (error) {
+      console.error("Error during officer ID retrieval:", error);
+    }
+  };
+
+  const parseCoordinates = (location) => {
+    const matches = location.match(/Lat:\s*([\d.-]+),\s*Lon:\s*([\d.-]+)/);
+    if (!matches) return null;
+    return { latitude: matches[1], longitude: matches[2] };
+  };
+
+  const fetchPlaceName = async (latitude, longitude) => {
+    try {
+      const response = await axios.get(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`
+      );
+
+      if (response.data.status === "OK") {
+        return (
+          response.data.results[0]?.formatted_address || "Unknown location"
+        );
+      } else {
+        console.error("Error fetching place name:", response.data.status);
+        return "Unknown location";
+      }
+    } catch (error) {
+      console.error("Error fetching place name:", error);
+      return "Unknown location";
+    }
+  };
+
+  const enhanceReportsWithLocation = async (reports) => {
+    try {
+      const enhancedReports = await Promise.all(
+        reports.map(async (report) => {
+          if (!report.location) {
+            return { ...report, address: "Unknown location" };
+          }
+
+          const coordinates = parseCoordinates(report.location);
+          if (coordinates) {
+            const address = await fetchPlaceName(
+              coordinates.latitude,
+              coordinates.longitude
+            );
+            return { ...report, address };
+          } else {
+            return { ...report, address: "Unknown location" };
+          }
+        })
+      );
+      return enhancedReports;
+    } catch (error) {
+      console.error("Error enhancing reports with location:", error);
+      return reports;
+    }
+  };
+
+  useEffect(() => {
+    fetchOfficerId();
+  }, []);
+
+  useEffect(() => {
+    const fetchReports = async () => {
+      if (!createdBy) return;
+      try {
+        const { data: reports, error } = await supabase
+          .from("reports")
+          .select("*, officer:created_by(name, contact), evidence(file_url)")
+          .eq("status", "pending")
+          .neq("created_by", createdBy)
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          console.error("Error fetching reports:", error);
+        } else {
+          const enhancedReports = await enhanceReportsWithLocation(reports);
+          setOriginalData(enhancedReports); // Store original data
+          setData(enhancedReports); // Set filtered data as well
+        }
+      } catch (error) {
+        console.error("Error fetching reports:", error);
+      }
+    };
+
+    fetchReports();
+  }, [createdBy]);
 
   const handleSearch = (text) => {
     setSearchText(text);
     if (text === "") {
-      setData(dummyData);
+      setData(originalData); // Reset data to original unfiltered data
     } else {
-      const filteredData = dummyData.filter(
+      const filteredData = originalData.filter(
         (item) =>
           item.description.toLowerCase().includes(text.toLowerCase()) ||
-          item.location.toLowerCase().includes(text.toLowerCase()) ||
-          item.officer.toLowerCase().includes(text.toLowerCase())
+          item.address.toLowerCase().includes(text.toLowerCase()) || // Search by address
+          item.officer.name.toLowerCase().includes(text.toLowerCase()) ||
+          item.officer.contact.toLowerCase().includes(text.toLowerCase())
       );
       setData(filteredData);
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Active":
-        return "#e74c3c";
-      case "Under Investigation":
-        return "#f39c12";
-      case "Resolved":
-        return "#2ecc71";
-      default:
-        return "#3498db";
-    }
+  const handleReportPress = (reportId) => {
+    navigation.navigate("Other Report", { reportId });
   };
 
   const renderCard = ({ item }) => (
@@ -86,26 +158,27 @@ const Updates = () => {
         <View style={styles.headerLeft}>
           <MaterialIcons name="person" size={24} color="#333" />
           <View>
-            <Text style={styles.officerName}>{item.officer}</Text>
-            <Text style={styles.reportLocation}>{item.location}</Text>
+            <Text style={styles.officerName}>{item.officer.name}</Text>
+            <Text style={styles.reportLocation}>
+              {item.address || item.location}
+            </Text>
+            {item.officer.contact && (
+              <Text style={styles.officerContact}>
+                Contact: {item.officer.contact}
+              </Text>
+            )}
           </View>
-        </View>
-        <View
-          style={[
-            styles.statusBadge,
-            { backgroundColor: getStatusColor(item.status) },
-          ]}
-        >
-          <Text style={styles.statusText}>{item.status}</Text>
         </View>
       </View>
 
-      {/* Image Section */}
-      <Image
-        style={styles.reportImage}
-        source={{ uri: item.image }}
-        resizeMode="cover"
-      />
+      {/* Image Section - First Image Evidence */}
+      {item.evidence && item.evidence.length > 0 && (
+        <Image
+          style={styles.reportImage}
+          source={{ uri: item.evidence[0].file_url }}
+          resizeMode="cover"
+        />
+      )}
 
       {/* Description Section */}
       <View style={styles.descriptionContainer}>
@@ -120,6 +193,14 @@ const Updates = () => {
           </View>
         </View>
       </View>
+
+      {/* View more details */}
+      <TouchableOpacity
+        style={styles.viewMoreButton}
+        onPress={() => handleReportPress(item.id)}
+      >
+        <Text style={styles.viewMoreText}>View Details</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -147,7 +228,7 @@ const Updates = () => {
             style={styles.refreshButton}
             onPress={() => {
               setSearchText("");
-              setData(dummyData);
+              setData(originalData); // Reset data to original on refresh
             }}
           >
             <Ionicons name="refresh" size={24} color="#2ecc71" />
@@ -247,6 +328,11 @@ const styles = StyleSheet.create({
     color: "#666",
     marginLeft: 10,
   },
+  officerContact: {
+    fontSize: 14,
+    color: "#007bff",
+    marginLeft: 10,
+  },
   reportImage: {
     width: "100%",
     height: 400,
@@ -274,16 +360,6 @@ const styles = StyleSheet.create({
     color: "#666",
     fontSize: 14,
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-  },
-  statusText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -294,6 +370,19 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 18,
     marginTop: 15,
+  },
+  viewMoreButton: {
+    backgroundColor: "#007bff",
+    paddingVertical: 10,
+    borderRadius: 5,
+    marginTop: 10,
+    marginBottom: 15,
+    marginHorizontal: 15,
+    alignItems: "center",
+  },
+  viewMoreText: {
+    color: "#fff",
+    fontSize: 16,
   },
 });
 

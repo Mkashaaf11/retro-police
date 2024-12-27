@@ -16,18 +16,19 @@ import { useProfile } from "../../../providers/ProfileContext";
 
 const { width } = Dimensions.get("window");
 
-const barData = [
-  { value: 15, label: "Jan" },
-  { value: 30, label: "Feb" },
-  { value: 26, label: "Mar" },
-  { value: 40, label: "Apr" },
-];
+type PendingReport = {
+  id: number;
+  title: string;
+  description: string;
+  incident_date: string;
+  status: string;
+};
 
 const Dashboard = ({ navigation }) => {
-  const [pendingReportsData, setPendingReportsData] = useState([]);
-  const [createdBy, setCreatedBy] = useState(null);
-  const [completedCases, setCompletedCasesData] = useState([]);
-  const [reportedCases, setReportedCasesData] = useState([]);
+  const [pendingReportsData, setPendingReportsData] = useState<any>([]);
+  const [createdBy, setCreatedBy] = useState<any>(null);
+  const [completedCases, setCompletedCasesData] = useState<any>([]);
+  const [reportedCases, setReportedCasesData] = useState<any>([]);
 
   const { session } = useProfile();
 
@@ -75,23 +76,28 @@ const Dashboard = ({ navigation }) => {
   const fetchCompletedCases = async () => {
     if (!createdBy) return;
     try {
-      const { data, error } = await supabase
-        .from("reports")
-        .select("incident_date, count(*)")
-        .eq("status", "completed")
-        .eq("created_by", createdBy)
-        .group("incident_date")
-        .order("incident_date", { ascending: true });
+      const oneYearAgo = new Date();
+      oneYearAgo.setMonth(oneYearAgo.getMonth() - 11);
+      const startDate = `${oneYearAgo.getFullYear()}-${String(
+        oneYearAgo.getMonth() + 1
+      ).padStart(2, "0")}-01`;
+
+      const { data, error } = await supabase.rpc("get_completed_cases", {
+        created_by_id: createdBy,
+        start_date: startDate,
+      });
 
       if (error) {
         console.error("Error fetching completed cases:", error);
       } else {
-        // Process the data into the desired format for the first array
         const completedCasesData = data.map((item) => ({
-          label: item.incident_date.toLocaleString("default", {
-            month: "short",
-            year: "numeric",
-          }),
+          label: `${new Date(item.year, item.month - 1).toLocaleString(
+            "default",
+            {
+              month: "short",
+              year: "numeric",
+            }
+          )}`,
           value: item.count,
         }));
         setCompletedCasesData(completedCasesData);
@@ -104,22 +110,28 @@ const Dashboard = ({ navigation }) => {
   const fetchReportedCases = async () => {
     if (!createdBy) return;
     try {
-      const { data, error } = await supabase
-        .from("reports")
-        .select("created_at, count(*)")
-        .eq("created_by", createdBy)
-        .group("created_at")
-        .order("created_at", { ascending: true });
+      const oneYearAgo = new Date();
+      oneYearAgo.setMonth(oneYearAgo.getMonth() - 11);
+      const startDate = `${oneYearAgo.getFullYear()}-${String(
+        oneYearAgo.getMonth() + 1
+      ).padStart(2, "0")}-01`;
+
+      const { data, error } = await supabase.rpc("get_reported_cases", {
+        created_by_id: createdBy,
+        start_date: startDate,
+      });
 
       if (error) {
         console.error("Error fetching reported cases:", error);
       } else {
-        // Process the data into the desired format for the second array
         const reportedCasesData = data.map((item) => ({
-          label: item.created_at.toLocaleString("default", {
-            month: "short",
-            year: "numeric",
-          }),
+          label: `${new Date(item.year, item.month - 1).toLocaleString(
+            "default",
+            {
+              month: "short",
+              year: "numeric",
+            }
+          )}`,
           value: item.count,
         }));
         setReportedCasesData(reportedCasesData);
@@ -137,7 +149,7 @@ const Dashboard = ({ navigation }) => {
     if (createdBy) {
       fetchPendingReports();
       fetchCompletedCases();
-      fetchPendingReports();
+      fetchReportedCases();
     }
   }, [createdBy]);
 
@@ -168,7 +180,7 @@ const Dashboard = ({ navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => navigation.navigate("View Reports")}
+              onPress={() => navigation.navigate("View Report")}
             >
               <Feather name="file-text" size={20} color="white" />
               <Text style={styles.actionButtonText}>View Reports</Text>
@@ -180,7 +192,7 @@ const Dashboard = ({ navigation }) => {
             <Text style={styles.sectionTitle}>Pending Reports</Text>
             <Carousel
               data={pendingReportsData}
-              renderItem={({ item }) => (
+              renderItem={({ item }: { item: PendingReport }) => (
                 <TouchableOpacity
                   style={styles.pendingReportCard}
                   onPress={() =>
@@ -193,9 +205,9 @@ const Dashboard = ({ navigation }) => {
                   <Text style={styles.reportTitleText}>{item.title}</Text>
                   <View style={styles.reportDetailsContainer}>
                     <View style={styles.reportDetailItem}>
-                      <Feather name="map-pin" size={16} color="#7f8c8d" />
+                      <Feather name="file-text" size={16} color="#7f8c8d" />
                       <Text style={styles.reportDetailText}>
-                        {item.location}
+                        {item.description}
                       </Text>
                     </View>
                     <View style={styles.reportDetailItem}>
@@ -231,24 +243,43 @@ const Dashboard = ({ navigation }) => {
           <View style={styles.chartCard}>
             <Text style={styles.chartTitle}>Case Progression</Text>
             <BarChart
-              data={barData}
-              width={width - 60}
+              data={completedCases}
+              width={width - 80}
               height={200}
               frontColor="#3498db"
+              gradientColor="#ecf0f1"
               showVerticalLines
-              verticalLinesColor="rgba(255,255,255,0.2)"
+              verticalLinesColor="rgba(52, 152, 219, 0.1)"
+              spacing={40}
+              hideRules
+              xAxisColor="rgba(44, 62, 80, 0.3)"
+              yAxisColor="rgba(44, 62, 80, 0.3)"
+              yAxisTextStyle={styles.chartAxisText}
+              xAxisLabelTextStyle={styles.chartAxisText}
+              noOfSections={5}
+              maxValue={50}
+              labelWidth={60}
             />
           </View>
 
-          <View style={styles.chartCard}>
+          <View style={[styles.chartCard, styles.lastChartCard]}>
             <Text style={styles.chartTitle}>Incident Trends</Text>
             <LineChart
-              data={barData}
-              width={width - 60}
+              data={reportedCases}
+              width={width - 80}
               height={200}
               color="#6dbf44"
               showVerticalLines
-              verticalLinesColor="rgba(255,255,255,0.2)"
+              verticalLinesColor="rgba(109, 191, 68, 0.1)"
+              spacing={40}
+              hideRules
+              xAxisColor="rgba(44, 62, 80, 0.3)"
+              yAxisColor="rgba(44, 62, 80, 0.3)"
+              yAxisTextStyle={styles.chartAxisText}
+              xAxisLabelTextStyle={styles.chartAxisText}
+              noOfSections={5}
+              maxValue={50}
+              curved
             />
           </View>
         </View>
@@ -258,182 +289,213 @@ const Dashboard = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  // Main Container for the Scroll View
   container: {
     flex: 1,
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingBottom: 30,
+    paddingBottom: 20, // Prevent overlap with last element
   },
   welcomeSection: {
     backgroundColor: "rgba(255,255,255,0.1)",
-    paddingVertical: 20,
-    paddingHorizontal: 15,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    marginBottom: 10,
   },
   welcomeHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 24,
   },
   welcomeText: {
     color: "white",
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
+    marginBottom: 4,
   },
   subWelcomeText: {
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(255,255,255,0.8)",
     fontSize: 16,
   },
   quickActionsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 20,
+    marginBottom: 24,
+    gap: 12,
   },
   actionButton: {
+    flex: 1,
     flexDirection: "row",
     backgroundColor: "#3498db",
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   actionButtonText: {
     color: "white",
     fontWeight: "bold",
     marginLeft: 10,
-  },
-  quickStatsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  quickActionCard: {
-    backgroundColor: "white",
-    borderRadius: 15,
-    padding: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    width: "30%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  quickActionIconContainer: {
-    backgroundColor: "#e6f2ff",
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 15,
-  },
-  quickActionContent: {
-    flex: 1,
-  },
-  quickActionTitle: {
-    color: "#7f8c8d",
-    fontSize: 12,
-    marginBottom: 5,
-  },
-  quickActionCount: {
-    color: "#2c3e50",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  chartsContainer: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    padding: 20,
-    marginTop: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#2c3e50",
-    marginBottom: 20,
-    paddingBottom: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: "#3498db",
-  },
-  chartCard: {
-    backgroundColor: "#f7f8fa",
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  chartTitle: {
-    color: "#2c3e50",
     fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 10,
   },
-  pendingReportsContainer: {
-    marginVertical: 20,
+
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "white",
+    marginBottom: 24,
+    paddingBottom: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(255,255,255,0.3)",
+    textAlign: "center", // Center-align the text
   },
   pendingReportCard: {
     backgroundColor: "white",
     borderRadius: 20,
-    padding: 20,
+    padding: 24,
+    marginHorizontal: 4,
+    height: 280,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    overflow: "hidden", // Ensure content stays within rounded edges
+    marginBottom: 8,
+  },
+  pendingReportsContainer: {
+    marginVertical: 20,
+    marginHorizontal: 20,
+    paddingBottom: 20, // Ensure enough space for the card
+    overflow: "visible", // Prevent clipping of child elements
   },
   pendingReportHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 16,
   },
   reportNumberText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#2c3e50",
-  },
-  priorityBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-  },
-  priorityBadgeText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  reportTitleText: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#2c3e50",
-    marginBottom: 10,
+  },
+  reportTitleText: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#2c3e50",
+    marginBottom: 16,
+    lineHeight: 28,
   },
   reportDetailsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
+    gap: 12,
+    marginBottom: 16,
   },
   reportDetailItem: {
     flexDirection: "row",
     alignItems: "center",
+    paddingVertical: 4,
   },
   reportDetailText: {
-    marginLeft: 5,
+    marginLeft: 8,
     color: "#7f8c8d",
-    fontSize: 14,
+    fontSize: 15,
+    flex: 1,
   },
   reportStatusText: {
     color: "#3498db",
     fontWeight: "600",
+    fontSize: 16,
     textAlign: "right",
+    position: "absolute",
+    bottom: 24,
+    right: 24,
+  },
+  chartsContainer: {
+    marginHorizontal: 20, // Adds spacing on left and right
+    marginTop: 30, // Adds spacing above the charts section
+    paddingVertical: 20, // Padding within the container
+    borderRadius: 16, // Smooth rounded edges
+    backgroundColor: "rgba(255,255,255,0.1)", // Subtle background for the section
+    shadowColor: "#000", // Shadow for depth
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3, // Android-specific shadow depth
+  },
+
+  chartsSection: {
+    backgroundColor: "white",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    marginTop: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 10,
+    flex: 1,
+  },
+  chartCard: {
+    margin: 20,
+    marginBottom: 0,
+    backgroundColor: "#f7f8fa",
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  lastChartCard: {
+    marginBottom: 20,
+  },
+  chartTitle: {
+    color: "#2c3e50",
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 20,
+  },
+  metricsTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#2c3e50",
+    margin: 20,
+    marginBottom: 0,
+  },
+  chartAxisText: {
+    color: "#7f8c8d",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  chartLegend: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 16,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  legendText: {
+    color: "#7f8c8d",
+    fontSize: 12,
+    fontWeight: "500",
   },
 });
 
