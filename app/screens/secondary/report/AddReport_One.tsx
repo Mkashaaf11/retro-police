@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Alert, ScrollView } from "react-native";
 import { TextInput, Button, Card, Title, Text } from "react-native-paper";
 import * as Location from "expo-location";
@@ -16,6 +16,8 @@ const AddReportDetails = ({ navigation }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const { session } = useProfile();
 
+  const LOCAL_STORAGE_KEY = "report_data";
+
   const validationSchema = Yup.object().shape({
     incidentDescription: Yup.string()
       .required("Incident description is required")
@@ -24,6 +26,55 @@ const AddReportDetails = ({ navigation }) => {
       "Give a title to the report please for your convenience"
     ),
   });
+
+  useEffect(() => {
+    const loadSavedData = async () => {
+      try {
+        const savedData = await AsyncStorage.getItem(LOCAL_STORAGE_KEY);
+        if (savedData) {
+          const { title, incidentDescription, location, date } =
+            JSON.parse(savedData);
+          setDate(new Date(date));
+          setLocation(location);
+
+          setInitialValues({
+            title,
+            incidentDescription,
+          });
+        }
+      } catch (error) {
+        console.error("Error loading saved report data:", error);
+      }
+    };
+
+    loadSavedData();
+  }, []);
+
+  const [initialValues, setInitialValues] = useState({
+    title: "",
+    incidentDescription: "",
+  });
+
+  const saveToLocalStorage = async (values) => {
+    try {
+      const dataToSave = {
+        ...values,
+        location,
+        date: date.toISOString(),
+      };
+      await AsyncStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
+    } catch (error) {
+      console.error("Error saving report data to local storage:", error);
+    }
+  };
+
+  const clearLocalStorage = async () => {
+    try {
+      await AsyncStorage.removeItem(LOCAL_STORAGE_KEY);
+    } catch (error) {
+      console.error("Error clearing local storage:", error);
+    }
+  };
 
   const getLocation = async () => {
     let { status } = await Location.requestForegroundPermissionsAsync();
@@ -64,6 +115,7 @@ const AddReportDetails = ({ navigation }) => {
       Alert.alert("Error", "You must be logged in to submit a report.");
       return;
     }
+
     try {
       const { data, error } = await supabase
         .from("reports")
@@ -84,16 +136,10 @@ const AddReportDetails = ({ navigation }) => {
         console.error(error);
       } else {
         if (data && data.length > 0) {
+          await clearLocalStorage();
           const reportId = data[0]?.id;
           navigation.navigate("Step 2", { reportId });
         }
-
-        // Save report data in AsyncStorage for later use
-        //await AsyncStorage.setItem("reportId", reportId.toString());
-        /*await AsyncStorage.setItem(
-          "reportData",
-          JSON.stringify({ title, incidentDescription, location, date })
-        ); */
       }
     } catch (error) {
       Alert.alert("Error", "An error occurred while submitting the report.");
@@ -103,7 +149,8 @@ const AddReportDetails = ({ navigation }) => {
 
   return (
     <Formik
-      initialValues={{ title: "", incidentDescription: "" }}
+      initialValues={initialValues}
+      enableReinitialize={true}
       validationSchema={validationSchema}
       onSubmit={handleSubmit}
     >
@@ -133,7 +180,10 @@ const AddReportDetails = ({ navigation }) => {
                 <TextInput
                   label="Incident Title"
                   value={values.title}
-                  onChangeText={handleChange("title")}
+                  onChangeText={(text) => {
+                    handleChange("title")(text);
+                    saveToLocalStorage({ ...values, title: text });
+                  }}
                   onBlur={handleBlur("title")}
                   mode="flat"
                   style={styles.input}
@@ -156,7 +206,13 @@ const AddReportDetails = ({ navigation }) => {
                 <TextInput
                   label="Incident Description"
                   value={values.incidentDescription}
-                  onChangeText={handleChange("incidentDescription")}
+                  onChangeText={(text) => {
+                    handleChange("incidentDescription")(text);
+                    saveToLocalStorage({
+                      ...values,
+                      incidentDescription: text,
+                    });
+                  }}
                   onBlur={handleBlur("incidentDescription")}
                   mode="flat"
                   style={styles.input}
@@ -193,14 +249,20 @@ const AddReportDetails = ({ navigation }) => {
                   value={date}
                   mode="date"
                   display="default"
-                  onChange={handleDateChange}
+                  onChange={(e, selectedDate) => {
+                    handleDateChange(e, selectedDate);
+                    saveToLocalStorage({ ...values });
+                  }}
                 />
               )}
 
               {/* Get Location Button */}
               <Button
                 mode="outlined"
-                onPress={getLocation}
+                onPress={() => {
+                  getLocation();
+                  saveToLocalStorage({ ...values });
+                }}
                 style={styles.button}
                 icon={() => (
                   <MaterialCommunityIcons
